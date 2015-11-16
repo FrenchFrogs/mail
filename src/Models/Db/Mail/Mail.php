@@ -1,4 +1,4 @@
-<?php namespace Models\Db\Mail;
+<?php namespace FrenchFrogs\Models\Db\Mail;
 
 use Illuminate\Database\Eloquent\Model;
 
@@ -21,8 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Relations
  *
- * @property Models\Db\Mail\Status   $mail_status
- * @property Models\Db\Mail\Version  $mail_version
+ * @property \FrenchFrogs\Models\Db\Mail\Status   $mail_status
+ * @property \FrenchFrogs\Models\Db\Mail\Version  $mail_version
  *
  */
 class Mail extends Model {

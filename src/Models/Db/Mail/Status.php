@@ -1,11 +1,11 @@
-<?php namespace Models\Db\Mail;
+<?php namespace FrenchFrogs\Models\Db\Mail;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
  *  Class Status
- *  @property Models\Db\Mail\Status
+ *  @property \FrenchFrogs\Models\Db\Mail\Status
  *
  *  Magic properties
  *
