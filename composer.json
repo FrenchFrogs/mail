@@ -1,0 +1,30 @@
+{
+  "name": "frenchfrogs/mail",
+  "description": "Mail Database management with frenchfrogs framework",
+  "type": "library",
+  "source": {
+    "url": "git@github.com:FrenchFrogs/mail.git",
+    "type": "git",
+    "reference": "origin/master"
+  },
+  "homepage": "https://github.com/FrenchFrogs/mail",
+  "licence": "GPL-3.0+",
+  "authors": [
+    {
+      "name": "Julien Houvion",
+      "email": "cotcotquedec@gmail.com",
+      "homepage": "https://github.com/cotcotquedec",
+      "role": "Project Manager"
+    }
+  ],
+  "require": {
+    "frenchfrogs/framework" : ">=0.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "FrenchFrogs\\Mail\\": "src/",
+      "FrenchFrogs\\Models\\": "src/Models/"
+    }
+  },
+  "minimum-stability": "dev"
+}
