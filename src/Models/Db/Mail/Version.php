@@ -24,7 +24,17 @@ class Version extends Model {
 
     protected $table = 'mail_version';
     protected $primaryKey = 'mail_version_id';
-    protected $fillable = ['mail_version_id', 'mail_version_label', 'version_number', 'controller', 'action', 'view_hash', 'view_name', 'is_active'];
+    protected $fillable = [
+        'mail_version_id',
+        'name',
+        'version_number',
+        'controller',
+        'action',
+        'view_hash',
+        'view_name',
+        'is_active'
+    ];
+    public $incrementing = false;
 
     public static function whereActionIs($action) {
         return Version::query()->where('action', 'LIKE', $action)->first();
