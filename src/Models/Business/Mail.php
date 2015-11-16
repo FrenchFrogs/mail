@@ -1,9 +1,10 @@
 <?php namespace FrenchFrogs\Models\Business;
 
 use Carbon\Carbon;
+use FrenchFrogs\Business\Business;
 use Models\Db;
 use Illuminate\Mail\Message;
-use Models\Db\Mail\Version;
+use FrenchFrogs\Models\Db\Mail\Version;
 
 /**
  *  Class Mail
@@ -22,7 +23,7 @@ use Models\Db\Mail\Version;
  *  @property int       $priority
  *  @property Message   $msg
  */
-class Mail
+class Mail extends Business
 {
     const STATUS_BLOCKED = 'blocked';
     const STATUS_BOUNCED = 'bounced';
@@ -33,7 +34,7 @@ class Mail
     const STATUS_SENT = 'sent';
     const STATUS_QUEUED = 'queued';
 
-    const CONTROLLER_DIR = 'App\Http\Controllers\Phoenix\Mail\\';
+    const CONTROLLER_DIR = 'App\Http\Controllers\\';
 
     protected $attach = [];
     protected $sender = [];
@@ -48,7 +49,7 @@ class Mail
 
     /**
      * @param string $attachment
-     * @return \Models\Business\Mail
+     * @return $this
      */
     public function setAttach($attachment)
     {
@@ -85,7 +86,7 @@ class Mail
 
     /**
      * @param string $subject
-     * @return \Models\Business\Mail
+     * @return $this
      */
     public function setSubject($subject)
     {
@@ -198,7 +199,7 @@ class Mail
 
     /**
      * @param int $priority
-     * @return \Models\Business\Mail
+     * @return $this
      */
     public function setPriority($priority)
     {
@@ -226,7 +227,7 @@ class Mail
      * Generates a \Illuminate\Mail\Message template ready to send
      *
      * @param array $args = []
-     * @return \Models\Business\Mail
+     * @return $this
      */
     public function generateMessage($args = [])
     {
@@ -273,7 +274,7 @@ class Mail
      *
      * @param string $action
      * @param array $args
-     * @return \Models\Business\Mail
+     * @return $this
      */
     public function generateAndSend($action, $args)
     {
@@ -293,7 +294,7 @@ class Mail
      * @return $this
      * @throws \Exception
      */
-    public function sendMessage($action, $msg, $args = [], $id = 0)
+    public function sendMessage($action, $msg, $args = [], $id = null)
     {
         $version = Version::whereActionIs($action);
         if (empty($version)) {
@@ -305,12 +306,26 @@ class Mail
             }
         }
         unset($args['msg']);
+        \DB::beginTransaction(function() use ($version, $id, $args) {
+            if (!is_null($id)) {
+                \FrenchFrogs\Models\Db\Mail\Mail::query()->where('mail_id', '=', \Uuid::import($id)->bytes)->update([
+                    'mail_status_id' => Mail::STATUS_SENT,
+                    'mail_version_id' => $version->getKey(),
+                    'args' => json_encode($args),
+                    'inserted_at' => Carbon::now()
+                ]);
+            } else {
+                \FrenchFrogs\Models\Db\Mail\Mail::create([
+                    'mail_id' => static::generateUuid(),
+                    'mail_status_id' => Mail::STATUS_SENT,
+                    'mail_version_id' => $version->getKey(),
+                    'args' => json_encode($args),
+                    'inserted_at' => Carbon::now()
+                ]);
+            }
+        });
+
         response()->mail($version->view_name, $args, $msg, $this->attach);
-        if (!empty($id)) {
-            Db\Mail\Mail::query()->where('mail_id', '=', $id)->update(['mail_status_id' => Mail::STATUS_SENT, 'mail_version_id' => $version->getKey(), 'args' => json_encode($args), 'inserted_at' => Carbon::now('Europe/Paris')]);
-        } else {
-            Db\Mail\Mail::create(['mail_status_id' => Mail::STATUS_SENT, 'mail_version_id' => $version->getKey(), 'args' => json_encode($args), 'inserted_at' => Carbon::now('Europe/Paris')]);
-        }
         return $this;
     }
 
@@ -324,7 +339,7 @@ class Mail
      */
     public function send($action, $args)
     {
-        $version = Db\Mail\Version::whereActionIs($action);
+        $version = Version::whereActionIs($action);
         if (empty($version)) {
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
@@ -335,8 +350,16 @@ class Mail
                 }
             }
             unset($args['msg']);
+            \DB::beginTransaction(function() use ($version, $args) {
+                \FrenchFrogs\Models\Db\Mail\Mail::create([
+                    'mail_id' => static::generateUuid(),
+                    'mail_status_id' => Mail::STATUS_SENT,
+                    'mail_version_id' => $version->getKey(),
+                    'args' => json_encode($args),
+                    'inserted_at' => Carbon::now()
+                ]);
+            });
             response()->mail($version->view_name, $args, $this->msg);
-            Db\Mail\Mail::create(['mail_status_id' => Mail::STATUS_SENT, 'mail_version_id' => $version->getKey(), 'args' => json_encode($args), 'inserted_at' => Carbon::now('Europe/Paris')]);
         }
         return $this;
     }
@@ -344,11 +367,29 @@ class Mail
     /**
      * @param $controller
      * @param $action
-     * @param $args
-     * @return string
+     * @param ...$args
+     * @throws \Exception
      */
     static public function async($controller, $action, ...$args)
     {
+        $version = Version::query()
+            ->where('controller', 'LIKE', $controller)
+            ->where('action', 'LIKE', $action)->first();
+
+        if (empty($version)) {
+            throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
+        }
+
+        \DB::beginTransaction(function() use ($version, $args) {
+            \FrenchFrogs\Models\Db\Mail\Mail::create([
+                'mail_id' => static::generateUuid(),
+                'mail_status_id' => Mail::STATUS_SENT,
+                'mail_version_id' => $version->getKey(),
+                'args' => json_encode($args),
+                'inserted_at' => Carbon::now()
+            ]);
+        });
+
         $class = new $controller();
         $class->$action(...$args);
     }
@@ -363,7 +404,7 @@ class Mail
      */
     public function queue($action, $args)
     {
-        $version = Db\Mail\Version::whereActionIs($action);
+        $version = Version::whereActionIs($action);
         if (empty($version)) {
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
@@ -373,31 +414,29 @@ class Mail
             }
         }
         unset($args['msg']);
-        Db\Mail\Mail::create(['mail_status_id' => Mail::STATUS_QUEUED, 'mail_version_id' => $version->getKey(), 'args' => json_encode($args), 'inserted_at' => Carbon::now('Europe/Paris')]);
-        return $this;
-    }
 
-    /**
-     * Test if mail exists
-     *
-     * @param $id
-     * @return bool
-     */
-    public static function exists($id)
-    {
-        $mail = Db\Mail\Mail::where('mail_id', '=', $id)->first();
-        return (!empty($mail)) ? true : false;
+        \DB::beginTransaction(function() use ($version, $args) {
+            \FrenchFrogs\Models\Db\Mail\Mail::create([
+                'mail_id' => static::generateUuid(),
+                'mail_status_id' => Mail::STATUS_QUEUED,
+                'mail_version_id' => $version->getKey(),
+                'args' => json_encode($args),
+                'inserted_at' => Carbon::now()
+            ]);
+        });
+
+        return $this;
     }
 
     /**
      * Get Mail by id
      *
      * @param int $id
-     * @return Db\Mail\Mail
+     * @return \FrenchFrogs\Models\Db\Mail\Mail
      */
     public static function getById($id)
     {
-        return Db\Mail\Mail::where('mail_id', '=', $id)->firstOrFail();
+        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', $id)->firstOrFail();
     }
 
     /**
@@ -432,6 +471,7 @@ class Mail
     public static function checkForUpdate()
     {
         // recuperation du path des views de mail
+        // @TODO voir pour une constante
         $root = base_path() . '/resources/views/phoenix/mail/';
         // on récupère les versions active
         $rowset = \DB::table('mail_version')->where('is_active', '=', 1)->get();
@@ -458,7 +498,7 @@ class Mail
                         // si un hash est déjà en base on le remplace en mettant à jour le numéro de version
                         unset($data['mail_version_id']);
                         $data['version_number'] += 1;
-                        Db\Mail\Version::create($data);
+                        Version::create($data);
                         $version->update(['is_active' => 0]);
 
                     } else {
