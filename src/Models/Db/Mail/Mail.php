@@ -29,7 +29,7 @@ class Mail extends Model {
 
     protected $table = 'mail';
     protected $primaryKey = 'mail_id';
-    protected $fillable = ['mail_status_id', 'mail_version_id', 'message', 'args', 'opened_at', 'inserted_at'];
+    protected $fillable = ['mail_id', 'mail_status_id', 'mail_version_id', 'message', 'args', 'opened_at', 'sent_at'];
 
     public function status() {
         return $this->hasOne(Status::class, 'mail_status_id', 'mail_status_id');

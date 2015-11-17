@@ -373,22 +373,20 @@ class Mail extends Business
     static public function async($controller, $action, ...$args)
     {
         $version = Version::query()
-            ->where('controller', 'LIKE', $controller)
-            ->where('action', 'LIKE', $action)->first();
+            ->where('controller', '=', $controller)
+            ->where('action', '=', $action)->first();
 
         if (empty($version)) {
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
 
-        \DB::beginTransaction(function() use ($version, $args) {
-            \FrenchFrogs\Models\Db\Mail\Mail::create([
-                'mail_id' => static::generateUuid(),
-                'mail_status_id' => Mail::STATUS_SENT,
-                'mail_version_id' => $version->getKey(),
-                'args' => json_encode($args),
-                'inserted_at' => Carbon::now()
-            ]);
-        });
+        \FrenchFrogs\Models\Db\Mail\Mail::create([
+            'mail_id' => static::generateUuid(),
+            'mail_status_id' => Mail::STATUS_SENT,
+            'mail_version_id' => $version->getKey(),
+            'args' => json_encode($args),
+            'sent_at' => Carbon::now()
+        ]);
 
         $class = new $controller();
         $class->$action(...$args);
@@ -421,7 +419,7 @@ class Mail extends Business
                 'mail_status_id' => Mail::STATUS_QUEUED,
                 'mail_version_id' => $version->getKey(),
                 'args' => json_encode($args),
-                'inserted_at' => Carbon::now()
+                'sent_at' => Carbon::now()
             ]);
         });
 
