@@ -36,6 +36,8 @@ class Mail extends Business
 
     const CONTROLLER_DIR = 'App\Http\Controllers\\';
 
+    static protected $modelClass = \FrenchFrogs\Models\Db\Mail\Mail::class;
+
     protected $attach = [];
     protected $sender = [];
     protected $subject = '';
@@ -46,6 +48,18 @@ class Mail extends Business
     protected $replyTo = [];
     protected $priority;
     protected $msg;
+
+    /**
+     * Manage Db/Version via Business
+     *
+     * @param $id
+     * @return Business
+     */
+    static public function getVersion($id)
+    {
+        static::$modelClass = Version::class;
+        return parent::get($id);
+    }
 
     /**
      * @param string $attachment
@@ -316,7 +330,7 @@ class Mail extends Business
                 ]);
             } else {
                 \FrenchFrogs\Models\Db\Mail\Mail::create([
-                    'mail_id' => static::generateUuid(),
+                    'mail_id' => static::generateUuid()->bytes,
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
@@ -352,7 +366,7 @@ class Mail extends Business
             unset($args['msg']);
             \DB::beginTransaction(function() use ($version, $args) {
                 \FrenchFrogs\Models\Db\Mail\Mail::create([
-                    'mail_id' => static::generateUuid(),
+                    'mail_id' => static::generateUuid()->bytes,
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
@@ -381,7 +395,7 @@ class Mail extends Business
         }
 
         \FrenchFrogs\Models\Db\Mail\Mail::create([
-            'mail_id' => static::generateUuid(),
+            'mail_id' => static::generateUuid()->bytes,
             'mail_status_id' => Mail::STATUS_SENT,
             'mail_version_id' => $version->getKey(),
             'args' => json_encode($args),
@@ -415,7 +429,7 @@ class Mail extends Business
 
         \DB::beginTransaction(function() use ($version, $args) {
             \FrenchFrogs\Models\Db\Mail\Mail::create([
-                'mail_id' => static::generateUuid(),
+                'mail_id' => static::generateUuid()->bytes,
                 'mail_status_id' => Mail::STATUS_QUEUED,
                 'mail_version_id' => $version->getKey(),
                 'args' => json_encode($args),
@@ -434,7 +448,7 @@ class Mail extends Business
      */
     public static function getById($id)
     {
-        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', $id)->firstOrFail();
+        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', \Uuid::import($id)->bytes)->firstOrFail();
     }
 
     /**
@@ -446,21 +460,17 @@ class Mail extends Business
     public static function view($id)
     {
         $mail = \DB::table('mail as m')
-            ->where('mail_id', '=', $id)
+            ->where('mail_id', '=', \Uuid::import($id)->bytes)
             ->join('mail_version as v', 'm.mail_version_id', '=', 'v.mail_version_id')
             ->first(['controller', 'action', 'args', 'view_name']);
 
         // instanciation du controller pour récupérer la vue du mail
-        $controller = new \ReflectionClass(self::CONTROLLER_DIR.$mail['controller']);
+        $controller = new \ReflectionClass($mail['controller']);
         $method = $controller->getMethod($mail['action']);
-        $object = $controller->getConstant('CLASS_NAME');
-        // passage de l'ID du mail
-        $args[] = $id;
-        // passage des arguments de l'action et/ou de la vue
-        $args[] = (array) json_decode($mail['args']);
-        // activation du mode debug pour retrouner le visuel du mail et pas l'envoyer
-        $args[] = true;
-        return $method->invoke((new $object()), ...$args);
+        $args = (array) json_decode($mail['args']);
+        $args[] = true; // RENDER
+
+        return $method->invoke((new $mail['controller']()), ...$args);
     }
 
     /**
@@ -474,11 +484,9 @@ class Mail extends Business
         // on récupère les versions active
         $rowset = \DB::table('mail_version')->where('is_active', '=', 1)->get();
         $mail = [];
-
         foreach ($rowset as $row) {
-            $mail[sprintf('%s%s.blade.php', $root, $row['action'])] = $row;
+            $mail[sprintf('%s%s.blade.php', $root, substr(strrchr($row['view_name'], '.'), 1))] = $row;
         }
-
         // on verifie le hash de chaque fichier pour voir s'il a changé
         foreach ($mail as $file => $data) {
 
@@ -494,14 +502,21 @@ class Mail extends Business
                     $data['view_hash'] = $hash;
                     if (!empty($version->first()['view_hash'])) {
                         // si un hash est déjà en base on le remplace en mettant à jour le numéro de version
-                        unset($data['mail_version_id']);
+                        $data['mail_version_id'] = Business::generateUuid()->bytes;
                         $data['version_number'] += 1;
                         Version::create($data);
+                        // on met à jour les mail utilisant la version
+                        \DB::table('mail')->where('mail_version_id', '=', $version->first()['mail_version_id'])
+                            ->update(['mail_version_id' => $data['mail_version_id']]);
+
+                        // on désactive l'ancienne version
                         $version->update(['is_active' => 0]);
 
                     } else {
                         // sinon on l'ajoute simplement
-                        $version->update($data);
+                        \DB::beginTransaction(function() use ($data, $version) {
+                            $version->update($data);
+                        });
                     }
                 }
             } else {
