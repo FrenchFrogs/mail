@@ -1,6 +1,6 @@
 <?php namespace FrenchFrogs\Models\Db\Mail;
 
-use Illuminate\Database\Eloquent\Model;
+use FrenchFrogs\Laravel\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -25,7 +25,6 @@ class Version extends Model {
     protected $table = 'mail_version';
     protected $primaryKey = 'mail_version_id';
     protected $fillable = [
-        'mail_version_id',
         'name',
         'version_number',
         'controller',
@@ -34,7 +33,7 @@ class Version extends Model {
         'view_name',
         'is_active'
     ];
-    public $incrementing = false;
+    public $uuid = true;
 
     public static function whereActionIs($action) {
         return Version::query()->where('action', 'LIKE', $action)->first();

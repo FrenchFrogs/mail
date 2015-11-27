@@ -1,6 +1,6 @@
 <?php namespace FrenchFrogs\Models\Db\Mail;
 
-use Illuminate\Database\Eloquent\Model;
+use FrenchFrogs\Laravel\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 /**

@@ -322,7 +322,7 @@ class Mail extends Business
         unset($args['msg']);
         \DB::beginTransaction(function() use ($version, $id, $args) {
             if (!is_null($id)) {
-                \FrenchFrogs\Models\Db\Mail\Mail::query()->where('mail_id', '=', \Uuid::import($id)->bytes)->update([
+                \FrenchFrogs\Models\Db\Mail\Mail::query()->where('mail_id', '=', uuid('bytes', $id))->update([
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
@@ -330,7 +330,7 @@ class Mail extends Business
                 ]);
             } else {
                 \FrenchFrogs\Models\Db\Mail\Mail::create([
-                    'mail_id' => static::generateUuid()->bytes,
+                    'mail_id' => uuid(),
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
@@ -366,7 +366,7 @@ class Mail extends Business
             unset($args['msg']);
             \DB::beginTransaction(function() use ($version, $args) {
                 \FrenchFrogs\Models\Db\Mail\Mail::create([
-                    'mail_id' => static::generateUuid()->bytes,
+                    'mail_id' => uuid(),
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
@@ -395,7 +395,7 @@ class Mail extends Business
         }
 
         \FrenchFrogs\Models\Db\Mail\Mail::create([
-            'mail_id' => static::generateUuid()->bytes,
+            'mail_id' => uuid(),
             'mail_status_id' => Mail::STATUS_SENT,
             'mail_version_id' => $version->getKey(),
             'args' => json_encode($args),
@@ -429,7 +429,7 @@ class Mail extends Business
 
         \DB::beginTransaction(function() use ($version, $args) {
             \FrenchFrogs\Models\Db\Mail\Mail::create([
-                'mail_id' => static::generateUuid()->bytes,
+                'mail_id' => uuid(),
                 'mail_status_id' => Mail::STATUS_QUEUED,
                 'mail_version_id' => $version->getKey(),
                 'args' => json_encode($args),
@@ -448,7 +448,7 @@ class Mail extends Business
      */
     public static function getById($id)
     {
-        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', \Uuid::import($id)->bytes)->firstOrFail();
+        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', uuid('bytes', $id))->firstOrFail();
     }
 
     /**
@@ -460,7 +460,7 @@ class Mail extends Business
     public static function view($id)
     {
         $mail = \DB::table('mail as m')
-            ->where('mail_id', '=', \Uuid::import($id)->bytes)
+            ->where('mail_id', '=', uuid('bytes', $id))
             ->join('mail_version as v', 'm.mail_version_id', '=', 'v.mail_version_id')
             ->first(['controller', 'action', 'args', 'view_name']);
 
@@ -502,7 +502,7 @@ class Mail extends Business
                     $data['view_hash'] = $hash;
                     if (!empty($version->first()['view_hash'])) {
                         // si un hash est déjà en base on le remplace en mettant à jour le numéro de version
-                        $data['mail_version_id'] = Business::generateUuid()->bytes;
+                        $data['mail_version_id'] = uuid();
                         $data['version_number'] += 1;
                         Version::create($data);
                         // on met à jour les mail utilisant la version
