@@ -1,7 +1,10 @@
 <?php namespace FrenchFrogs\Models\Business;
 
+use App\Http\Controllers\Engie\ProjectController;
 use Carbon\Carbon;
 use FrenchFrogs\Business\Business;
+use \FrenchFrogs\Models\Db\Mail\Mail as ModelMail;
+use FrenchFrogs\Models\Db\Tracking\Tracking as ModelTracking;
 use Models\Db;
 use Illuminate\Mail\Message;
 use FrenchFrogs\Models\Db\Mail\Version;
@@ -36,7 +39,7 @@ class Mail extends Business
 
     const CONTROLLER_DIR = 'App\Http\Controllers\\';
 
-    static protected $modelClass = \FrenchFrogs\Models\Db\Mail\Mail::class;
+    static protected $modelClass = ModelMail::class;
 
     protected $attach = [];
     protected $sender = [];
@@ -322,14 +325,14 @@ class Mail extends Business
         unset($args['msg']);
         \DB::beginTransaction(function() use ($version, $id, $args) {
             if (!is_null($id)) {
-                \FrenchFrogs\Models\Db\Mail\Mail::query()->where('mail_id', '=', uuid('bytes', $id))->update([
+                ModelMail::query()->where('mail_id', '=', uuid('bytes', $id))->update([
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
                     'args' => json_encode($args),
                     'inserted_at' => Carbon::now()
                 ]);
             } else {
-                \FrenchFrogs\Models\Db\Mail\Mail::create([
+                ModelMail::create([
                     'mail_id' => uuid(),
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
@@ -365,7 +368,7 @@ class Mail extends Business
             }
             unset($args['msg']);
             \DB::beginTransaction(function() use ($version, $args) {
-                \FrenchFrogs\Models\Db\Mail\Mail::create([
+                ModelMail::create([
                     'mail_id' => uuid(),
                     'mail_status_id' => Mail::STATUS_SENT,
                     'mail_version_id' => $version->getKey(),
@@ -394,7 +397,7 @@ class Mail extends Business
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
 
-        \FrenchFrogs\Models\Db\Mail\Mail::create([
+        $mail = ModelMail::create([
             'mail_id' => uuid(),
             'mail_status_id' => Mail::STATUS_SENT,
             'mail_version_id' => $version->getKey(),
@@ -402,6 +405,13 @@ class Mail extends Business
             'sent_at' => Carbon::now()
         ]);
 
+        // ajout du pixel de tracking dans le mail courant
+        $tracker = Tracking::create([
+            'name' => $version->name,
+            'is_active' => 1
+        ]);
+
+        array_push($args, $tracker->generatePixelEmail($tracker->getModel()->tracking_hash, uuid('hex', $mail->mail_id)));
         $class = new $controller();
         $class->$action(...$args);
     }
@@ -428,7 +438,7 @@ class Mail extends Business
         unset($args['msg']);
 
         \DB::beginTransaction(function() use ($version, $args) {
-            \FrenchFrogs\Models\Db\Mail\Mail::create([
+            ModelMail::create([
                 'mail_id' => uuid(),
                 'mail_status_id' => Mail::STATUS_QUEUED,
                 'mail_version_id' => $version->getKey(),
@@ -448,7 +458,7 @@ class Mail extends Business
      */
     public static function getById($id)
     {
-        return \FrenchFrogs\Models\Db\Mail\Mail::where('mail_id', '=', uuid('bytes', $id))->firstOrFail();
+        return ModelMail::where('mail_id', '=', uuid('bytes', $id))->firstOrFail();
     }
 
     /**
@@ -468,6 +478,8 @@ class Mail extends Business
         $controller = new \ReflectionClass($mail['controller']);
         $method = $controller->getMethod($mail['action']);
         $args = (array) json_decode($mail['args']);
+
+        $args[] = '';
         $args[] = true; // RENDER
 
         return $method->invoke((new $mail['controller']()), ...$args);
@@ -480,7 +492,7 @@ class Mail extends Business
     {
         // recuperation du path des views de mail
         // @TODO voir pour une constante
-        $root = base_path() . '/resources/views/phoenix/mail/';
+        $root = base_path() . '/resources/views/mail/';
         // on récupère les versions active
         $rowset = \DB::table('mail_version')->where('is_active', '=', 1)->get();
         $mail = [];
