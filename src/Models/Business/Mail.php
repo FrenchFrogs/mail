@@ -561,7 +561,6 @@ class Mail extends Business
         $method = $controller->getMethod($mail['action']);
         $args = (array) json_decode($mail['args']);
 
-        $args[] = '';
         $args[] = true; // RENDER
 
         return $method->invoke((new $mail['controller']()), ...$args);
