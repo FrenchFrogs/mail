@@ -35,7 +35,6 @@ class Mail extends Business
     const STATUS_OPENED = 'opened';
     const STATUS_SENDING = 'sending';
     const STATUS_SENT = 'sent';
-    const STATUS_QUEUED = 'queued';
 
     const CONTROLLER_DIR = 'App\Http\Controllers\\';
 
@@ -75,6 +74,30 @@ class Mail extends Business
     }
 
     /**
+     * @return array
+     */
+    public function getAttach()
+    {
+        return $this->attach;
+    }
+
+    /**
+     * Attach in-memory data as an attachment.
+     *
+     * @param  string  $data
+     * @param  string  $name
+     * @param  array  $options
+     * @return $this
+     */
+    public function addAttach($data, $name, array $options = [])
+    {
+        $attach = $this->getAttach();
+        $attach[] = [$data,$name,$options];
+        $this->setAttach($attach);
+        return $this;
+    }
+
+    /**
      * @return boolean
      */
     public function hasAttach()
@@ -94,6 +117,14 @@ class Mail extends Business
     }
 
     /**
+     * @return array
+     */
+    public function getSender()
+    {
+        return $this->sender;
+    }
+
+    /**
      * @return boolean
      */
     public function hasSender()
@@ -109,6 +140,14 @@ class Mail extends Business
     {
         $this->subject = $subject;
         return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getSubject()
+    {
+        return $this->subject;
     }
 
     /**
@@ -131,6 +170,14 @@ class Mail extends Business
     }
 
     /**
+     * @return array
+     */
+    public function getFrom()
+    {
+        return $this->from;
+    }
+
+    /**
      * @return boolean
      */
     public function hasFrom()
@@ -147,6 +194,14 @@ class Mail extends Business
     {
         $this->to = [$address, $name];
         return $this;
+    }
+
+    /**
+     * @return array
+     */
+    public function getTo()
+    {
+        return $this->to;
     }
 
     /**
@@ -169,6 +224,14 @@ class Mail extends Business
     }
 
     /**
+     * @return array
+     */
+    public function getCc()
+    {
+        return $this->cc;
+    }
+
+    /**
      * @return boolean
      */
     public function hasCc()
@@ -185,6 +248,14 @@ class Mail extends Business
     {
         $this->bcc = [$address, $name];
         return $this;
+    }
+
+    /**
+     * @return array
+     */
+    public function getBcc()
+    {
+        return $this->bcc;
     }
 
     /**
@@ -207,6 +278,14 @@ class Mail extends Business
     }
 
     /**
+     * @return array
+     */
+    public function getReplyTo()
+    {
+        return $this->replyTo;
+    }
+
+    /**
      * @return boolean
      */
     public function hasReplyTo()
@@ -225,11 +304,29 @@ class Mail extends Business
     }
 
     /**
+     * @return int
+     */
+    public function getPriority()
+    {
+        return $this->priority;
+    }
+
+    /**
      * @return boolean
      */
     public function hasPriority()
     {
         return !empty($this->priority);
+    }
+
+    /**
+     * @param Message $msg
+     * @return $this
+     */
+    public function setMessage(Message $msg)
+    {
+        $this->msg = $msg;
+        return $this;
     }
 
     /**
@@ -255,34 +352,43 @@ class Mail extends Business
                 }
             }
         }
-        $this->msg = new Message(new \Swift_Message());
+        $msg = new Message(new \Swift_Message());
         if ($this->hasFrom()) {
-            $this->msg->from($this->from[0], $this->from[1]);
+            $from = $this->getFrom();
+            $msg->from($from[0], $from[1]);
         }
         if ($this->hasSender()) {
-            $this->msg->sender($this->sender[0], $this->sender[1]);
+            $sender = $this->getSender();
+            $msg->sender($sender[0], $sender[1]);
         }
         if ($this->hasTo()) {
-            $this->msg->to($this->to[0], $this->to[1]);
+            $to = $this->getTo();
+            $msg->to($to[0], $to[1]);
         }
         if ($this->hasCc()) {
-            $this->msg->cc($this->cc[0], $this->cc[1]);
+            $cc = $this->getCc();
+            $msg->cc($cc[0], $cc[1]);
         }
         if ($this->hasBcc()) {
-            $this->msg->bcc($this->bcc[0], $this->bcc[1]);
+            $bcc = $this->getBcc();
+            $msg->bcc($bcc[0], $bcc[1]);
         }
         if ($this->hasReplyTo()) {
-            $this->msg->replyTo($this->replyTo[0], $this->replyTo[1]);
+            $reply_to = $this->getReplyTo();
+            $msg->replyTo($reply_to[0], $reply_to[1]);
         }
         if ($this->hasSubject()) {
-            $this->msg->subject($this->subject);
+            $msg->subject($this->getSubject());
         }
         if ($this->hasAttach()) {
-            $this->msg->attach($this->attach[0], $this->attach[1]);
+            foreach($this->getAttach() as $attach){
+                $msg->attachData($attach[0], $attach[1], $attach[2]);
+            }
         }
         if ($this->hasPriority()) {
-            $this->msg->priority($this->priority);
+            $msg->priority($this->getPriority());
         }
+        $this->setMessage($msg);
         return $this;
     }
 
@@ -295,15 +401,20 @@ class Mail extends Business
      */
     public function generateAndSend($action, $args)
     {
-        $this->generateMessage();
+
         $this->send($action, $args);
         return $this;
+    }
+
+    public function generate($data, $callback)
+    {
+
     }
 
     /**
      * Send a mail with a given SwiftMessage
      *
-     * @param string $action
+     * @param string $version
      * @param Message $msg
      * @param array $args
      * @param int $id
@@ -311,74 +422,55 @@ class Mail extends Business
      * @return $this
      * @throws \Exception
      */
-    public function sendMessage($action, $msg, $args = [], $id = null)
+    public function send()
     {
-        $version = Version::whereActionIs($action);
-        if (empty($version)) {
-            throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
-        }
-        foreach (get_object_vars($this) as $k => $v) {
-            if (!empty($v)) {
-                $args[$k] = $v;
-            }
-        }
-        unset($args['msg']);
-        \DB::beginTransaction(function() use ($version, $id, $args) {
-            if (!is_null($id)) {
-                ModelMail::query()->where('mail_id', '=', uuid('bytes', $id))->update([
-                    'mail_status_id' => Mail::STATUS_SENT,
-                    'mail_version_id' => $version->getKey(),
-                    'args' => json_encode($args),
-                    'inserted_at' => Carbon::now()
-                ]);
-            } else {
-                ModelMail::create([
-                    'mail_id' => uuid(),
-                    'mail_status_id' => Mail::STATUS_SENT,
-                    'mail_version_id' => $version->getKey(),
-                    'args' => json_encode($args),
-                    'inserted_at' => Carbon::now()
-                ]);
-            }
-        });
 
-        response()->mail($version->view_name, $args, $msg, $this->attach);
+        //On récupère le model
+        $model = $this->getModel();
+
+        //On recuper la version lié au mail
+        $version = Version::query()
+                        ->where('mail_version_id', '=', uuid('bytes', $model->mail_version_id))
+                        ->first();
+        if (empty($version)) {
+            throw new \Exception('Impossible de trouver une version pour le mail ');
+        }
+
+        try {
+
+            //On genre le swiftMessage
+            $controller =  $version->controller;
+            $action =  $version->action;
+            $class = new $controller();
+            $return = $class->$action(...json_decode($model->args));
+
+            //Puis on envoie le mail
+            response()->mail($version->view_name, $return[0], $return[1]);
+
+            //Si tout se passe bien en passe le mail en envoyé
+            if(empty($model->sent_at)){
+                $model->mail_status_id = self::STATUS_SENT;
+                $model->sent_at = Carbon::now();
+            }
+        }catch (\Exception $e){
+            //en cas d'erreur on log l'erreur
+            $model->mail_status_id = self::STATUS_ERROR;
+            $model->message = $e->getMessage();
+        }
+
+        //On sauvegarde les infos
+        $model->save();
+
         return $this;
     }
 
-    /**
-     * Send a mail in queue
-     *
-     * @param string $action
-     * @param array $args
-     * @return $this
-     * @throws \Exception
-     */
-    public function send($action, $args)
+    static function sendFromId($id)
     {
-        $version = Version::whereActionIs($action);
-        if (empty($version)) {
-            throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
-        }
-        if (!empty($this->msg)) {
-            foreach (get_object_vars($this) as $k => $v) {
-                if (!empty($v)) {
-                    $args[$k] = $v;
-                }
-            }
-            unset($args['msg']);
-            \DB::beginTransaction(function() use ($version, $args) {
-                ModelMail::create([
-                    'mail_id' => uuid(),
-                    'mail_status_id' => Mail::STATUS_SENT,
-                    'mail_version_id' => $version->getKey(),
-                    'args' => json_encode($args),
-                    'inserted_at' => Carbon::now()
-                ]);
-            });
-            response()->mail($version->view_name, $args, $this->msg);
-        }
-        return $this;
+        //On recupere le mail
+        $class = self::class;
+        $mail = new $class($id);
+
+        return $mail->send();
     }
 
     /**
@@ -390,64 +482,54 @@ class Mail extends Business
     static public function async($controller, $action, ...$args)
     {
         $version = Version::query()
-            ->where('controller', '=', $controller)
-            ->where('action', '=', $action)->first();
+                        ->where('controller', '=', $controller)
+                        ->where('action', '=', $action)
+                        ->where('is_active',1)
+                        ->first();
 
         if (empty($version)) {
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
 
         $mail = ModelMail::create([
-            'mail_id' => uuid(),
-            'mail_status_id' => Mail::STATUS_SENT,
+            'mail_status_id' => Mail::STATUS_FILED,
             'mail_version_id' => $version->getKey(),
-            'args' => json_encode($args),
-            'sent_at' => Carbon::now()
+            'args' => json_encode($args)
         ]);
 
-        // ajout du pixel de tracking dans le mail courant
-        $tracker = Tracking::create([
-            'name' => $version->name,
-            'is_active' => 1
-        ]);
-
-        array_push($args, $tracker->generatePixelEmail($tracker->getModel()->tracking_hash, uuid('hex', $mail->mail_id)));
-        $class = new $controller();
-        $class->$action(...$args);
+        return $mail->mail_id;
     }
 
     /**
-     * Add a message in queue
-     *
-     * @param string $action
-     * @param array $args
-     * @return $this
+     * @param $controller
+     * @param $action
+     * @param ...$args
      * @throws \Exception
      */
-    public function queue($action, $args)
+    static public function sync($controller, $action, ...$args)
     {
-        $version = Version::whereActionIs($action);
+        $version = Version::query()
+            ->where('controller', '=', $controller)
+            ->where('action', '=', $action)
+            ->where('is_active',1)
+            ->first();
+
         if (empty($version)) {
             throw new \Exception('Impossible de trouver une version active pour le mail ' . $action);
         }
-        foreach (get_object_vars($this) as $k => $v) {
-            if (!empty($v)) {
-                $args[$k] = $v;
-            }
-        }
-        unset($args['msg']);
 
-        \DB::beginTransaction(function() use ($version, $args) {
-            ModelMail::create([
-                'mail_id' => uuid(),
-                'mail_status_id' => Mail::STATUS_QUEUED,
-                'mail_version_id' => $version->getKey(),
-                'args' => json_encode($args),
-                'sent_at' => Carbon::now()
-            ]);
-        });
+        $mail = ModelMail::create([
+            'mail_status_id' => self::STATUS_FILED,
+            'mail_version_id' => $version->getKey(),
+            'args' => json_encode($args)
+        ]);
 
-        return $this;
+        //On envoie le mail directement
+        $class = self::class;
+        $business = new $class($mail->mail_id);
+        $business->send();
+
+        return $mail->mail_id;
     }
 
     /**

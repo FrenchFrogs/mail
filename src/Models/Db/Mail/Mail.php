@@ -29,7 +29,6 @@ class Mail extends Model {
 
     protected $table = 'mail';
     protected $primaryKey = 'mail_id';
-    protected $fillable = ['mail_status_id', 'mail_version_id', 'message', 'args', 'opened_at', 'sent_at'];
     public $uuid = true;
 
     public function status() {
