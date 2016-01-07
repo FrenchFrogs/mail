@@ -5,6 +5,7 @@ use Carbon\Carbon;
 use FrenchFrogs\Business\Business;
 use \FrenchFrogs\Models\Db\Mail\Mail as ModelMail;
 use FrenchFrogs\Models\Db\Tracking\Tracking as ModelTracking;
+use Models\Business\MailTracking;
 use Models\Db;
 use Illuminate\Mail\Message;
 use FrenchFrogs\Models\Db\Mail\Version;
@@ -443,6 +444,11 @@ class Mail extends Business
             $action =  $version->action;
             $class = new $controller();
             $return = $class->$action(...json_decode($model->args));
+
+            //On gere le tracking si demandé
+            if (!empty($return[0]['tracking_hash'])) {
+                $return[0]['pixel'] = MailTracking::generatePixelEmail($return[0]['tracking_hash'], uuid('hex', $model->mail_id));
+            }
 
             //Puis on envoie le mail
             response()->mail($version->view_name, $return[0], $return[1]);
